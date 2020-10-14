@@ -1,9 +1,10 @@
-base_dir=/.../RAW_DATA
+base_dir=/.../TRAP_DATA
 module load  trim_galore/0.4.5
+module load kallisto/0.43.1
+module load star/2.6.0c
 mkdir ${base_dir}/TRIMMED_READS
 mkdir ${base_dir}/KALLISTO_COUNTS
-module load kallisto/0.43.1
-dir_raw=${base_dir}/TRAP-Field
+dir_raw=${base_dir}/RAW_READS
 dir_trimmed=${base_dir}/TRIMMED_READS
 dir_mapped=${base_dir}/KALLISTO_COUNTS
 dir_mapped2=${base_dir}/MAPPED_GENOME
