@@ -1,0 +1,484 @@
+---
+title: "WGCNA"
+author: "Torgeir R. Hvidsten & Dorota Kawa"
+date: "31/10/2019"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: yeti
+    code_folding: hide
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(WGCNA)
+options(stringsAsFactors = FALSE)
+library(tidyverse)
+library(gplots)
+
+library(DT)
+library(ggbiplot)
+
+```
+
+## Load and filter data
+
+```{r filter, warning=FALSE, message=FALSE}
+
+ext <- "unsigned_0.35"
+compute = FALSE
+
+# Load the expression data from ATLAS, FIELD and POT experiment (including MCO)
+counts <- read.table(file="/Users/dorota/Dropbox/UC_DAVIS/FIELD_SAMPLES/2019/Counts-and-tpm/20191120-Atlas-Field-Pot-TPM-quantile-norm-together-withMCO.csv", header=TRUE, row.names=1, sep=",")
+head(counts)
+dim(counts)
+# Select most variable genes 
+counts$variance <- apply(counts, 1, var)
+counts2 <- counts[counts$variance >= quantile(counts$variance, c(.25)), ] #75% most variable genes
+counts2$variance <- NULL
+
+# log2 transformation
+data.tmp <- counts2[which(apply(counts2, 1, function(x) mean(x)>1)),]
+data <- log2(data.tmp+1)
+
+paste0("Genes x Samples: ", paste0(dim(data), collapse = " x "))
+plot(density(as.matrix(data)), xlab = "Gene expression values", ylab = "", main = "", col = "red", lwd=5)
+dat <- data
+
+dat %>%
+  gather(Samples, Expression) %>%
+  ggplot(aes(x = Expression, col = Samples)) +
+  geom_density()
+  
+
+```
+
+## PCA/Hierarchical clustering
+
+```{r pca, warning=FALSE}
+
+# PCA
+meta <- read.table(file="/Users/dorota/Dropbox/UC_DAVIS/FIELD_SAMPLES/2019/Counts-and-tpm/metadata_field&atlas&potwithMCO.csv", header=TRUE, sep=",")
+pc <- prcomp(t(dat))
+var.expl <- pc$sdev^2 / sum(pc$sdev^2)
+paste0("Varance explained: ", paste0(format(var.expl[1:5], digits = 2), collapse = " "))
+samples <- colnames(dat)
+
+ggbiplot(pc,labels=meta$Promoter, var.axes = FALSE, groups=meta$Promoter)
+ggplot(as.data.frame(pc$x), aes(PC1, PC2, shape = meta$Experiment, col = meta$Promoter)) + 
+geom_point()+
+  xlab(paste0("PC1 (", round(var.expl[1], digits=2),")")) +
+  ylab(paste0("PC2 (", round(var.expl[2], digits=2),")")) +
+  ggtitle("PCA")
+
+# Hierarchical clustering
+dist.var <- as.dist(1-cor(dat))
+dist.var.tre <- hclust(dist.var, method = "ward.D")
+plot(dist.var.tre, cex = 1, sub = "", xlab = "", main = "Hierarchical clustering")
+
+if (FALSE) {
+  if (compute) {
+    dist.obs <- as.dist(1-cor(t(dat)))
+    dist.obs.tre <- hclust(dist.obs, method = "ward.D") 
+    save(dist.var.tre, dist.obs.tre, file = paste0("trees", ext, ".RData"))
+  } else {
+    load(paste0("trees", ext, ".RData"))
+  }
+
+  heatmap.2(x = as.matrix(dat), 
+            Rowv = as.dendrogram(dist.obs.tre),
+            Colv = as.dendrogram(dist.var.tre),
+            trace = "none",
+            scale = "row",
+            col = colorRampPalette(c("blue","white","red")),
+            labRow = c(""),
+            labCol = samples,
+            cexCol = 0.75,
+            srtCol = 45
+  )
+}
+
+```
+
+## Soft thresholding
+
+Find the soft threshold power for the WGCNA network. 
+
+```{r soft_thr, warning=FALSE}
+dat_t <- t(dat)
+
+powers = c(c(1:10), seq(from = 12, to=20, by=2))
+if (compute) {
+  sft = pickSoftThreshold(dat_t, powerVector = powers, corFnc = "bicor", networkType = "unsigned")
+  save(sft, file = paste0("sft", ext, ".RData"))
+} else {
+  load(paste0("sft", ext, ".RData"))
+}
+# Plot the results
+cex1 = 0.9;
+# Scale-free topology fit index as a function of the soft-thresholding power
+plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+     xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit R^2",type="n",
+     main = paste("Scale independence"));
+text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+     labels=powers,cex=cex1,col="red");
+# this line corresponds to using an R^2 cut-off of h
+abline(h=0.80,col="red")
+
+power <- 5
+```
+
+## Network module finding
+
+And some plots to show the similarity within and between modules.
+
+```{r modules, warning=FALSE}
+if (compute) {
+  modules <- blockwiseModules(datExpr = dat_t,
+                            power = power, 
+                            networkType = "unsigned", 
+                            corType = "bicor",
+                            maxPOutliers = 0.05,
+                            TOMType = "signed",
+                            mergeCutHeight = 0.35,
+                            maxBlockSize = 20000,
+                            saveTOMs = TRUE,
+                            saveTOMFileBase = paste0("TOM", ext)
+                            )
+  save(modules, file = paste0("modules", ext, ".RData"))
+  
+  load(paste0("TOM", ext, "-block.1.RData"))
+  TOM <- as.matrix(TOM)
+  save(TOM, file = paste0("TOM", ext, "-block.1.RData"))
+} else {
+  load(paste0("modules", ext, ".RData"))
+}
+
+paste0("Samples x Modules: ", paste0(dim(modules$MEs), collapse = " x "))
+
+# If TOM is needed
+#load(paste0("TOM", ext, "-block.1.RData"))
+
+#mergedColors = labels2colors(modules$colors)
+#plotDendroAndColors(modules$dendrograms[[1]], 
+#                    mergedColors[modules$blockGenes[[1]]],
+#                    "Module colors",
+#                    dendroLabels = FALSE, hang = 0.03,
+#                    addGuide = TRUE, guideHang = 0.05)
+
+MEs <- modules$MEs
+
+kME <- bicor(dat_t, MEs, maxPOutliers = 0.05)
+
+# Correlation within modules
+intra_cor <- c()
+for (i in 1:nrow(dat)) {
+  m <- modules$colors[i]
+  intra_cor[i] <- kME[i, paste0("ME", m)]
+}
+hist(intra_cor, xlim = c(-1,1), breaks = seq(-1,1,0.1),
+     main = "Correlations with module eigengene (within module correlation)",
+     xlab = "Correlation")
+
+# Correlation between modules
+MEs_R <- bicor(MEs, MEs, maxPOutliers = 0.05)
+hist(MEs_R[upper.tri(MEs_R)], xlim = c(-1,1), breaks = seq(-1,1,0.1),
+     main = "Correlations of module eigengenes (between module correlation)",
+     xlab = "Correlation")
+
+# Reassign genes to modules (if used, can be stricter than the WGCNA reassignment)
+R_th <- 0.7
+if (FALSE) {
+  c <- gsub("ME", "", colnames(MEs))
+  new_color <- rep("darkgrey",length(modules$colors))
+  max_sim <- apply(kME, 1, max)
+  for (i in 1:ncol(MEs)) {
+    new_color[kME[,i] == max_sim & kME[,i] > R_th] = c[i]
+  }
+  names(new_color) <- names(modules$colors)
+  modules$colors <- new_color
+}
+
+aa <-as.data.frame(modules$colors)
+
+```
+
+## Network degrees
+
+Compute different network connectivity (degree) measures.
+
+```{r centrality, warning=FALSE}
+
+# Compute degree
+if (compute) {
+  degrees <- intramodularConnectivity.fromExpr(dat_t, colors = modules$colors, power = power,
+                                             networkType = "signed", distFnc = "bicor")
+  save(degrees, file = paste0("degrees", ext, ".RData"))
+} else {
+  load(paste0("degrees", ext, ".RData"))
+}
+
+plot (density(degrees$kTotal[!is.na(degrees$kTotal)]), main = "Degree: Full network (kTotal)", xlab = "Degree")
+abline(v = 0, col = "red")
+plot (density(degrees$kWithin[!is.na(degrees$kWithin)]), main = "Degree: Within module (kWithin)", xlab = "Degree")
+abline(v = 0, col = "red")
+plot (density(degrees$kDiff[!is.na(degrees$kDiff)]), main = "Degree: Within minus outside module (kDiff)", xlab = "Degree")
+abline(v = 0, col = "red")
+```
+
+## Modules - Expression profiles
+
+Expression profile plots for each module.
+
+```{r spec_modules, warning=FALSE}
+
+met_mod <- modules$colors[-grep("Solyc", rownames(dat))]
+IntGenes <- data.frame(ID = rownames(dat)[1:10])
+
+annot <- read_delim("/Users/dorota/Dropbox/UC_DAVIS/FIELD_SAMPLES/2019/WGCN/SolycAnnotationsITAG310.csv", delim = ",", col_types = cols())
+if (FALSE) { # Additional interesting functions
+  hyp <- c("carboxylase","reductase","peroxidase","oxidase","laccase")
+  for (f in hyp) {
+    idx <- grep(f, annot$`arabi-defline`)
+    new_genes <- unique(annot$locusName[idx])
+    idx <- match(new_genes, IntGenes$ID)
+    idx <- which(!is.na(idx))
+    if (length(idx) > 0) {
+      new_genes <- new_genes[-idx]
+    }
+    if (length(new_genes) > 0) {
+      IntGenes <- rbind(IntGenes,data.frame(ID = new_genes, Symbol = f))
+    }
+  }
+}
+
+
+# Look at each module
+means_df <- data.frame(row.names = rownames(dat), 
+                       EP_Atlas=rowMeans(dat[,which(meta$DK_name=="EP_Atlas")]),
+                       EXO_Atlas=rowMeans(dat[,which(meta$DK_name=="EXO_Atlas")]),
+                       COR_Atlas=rowMeans(dat[,which(meta$DK_name=="COR_Atlas")]),
+                       EN_Atlas=rowMeans(dat[,which(meta$DK_name=="EN_Atlas")]),
+                       X35S_Atlas=rowMeans(dat[,which(meta$DK_name=="X35S_Atlas")]),
+                       MZ_Atlas=rowMeans(dat[,which(meta$DK_name=="MZ_Atlas")]),
+                       ACT_Atlas=rowMeans(dat[,which(meta$DK_name=="ACT_Atlas")]),
+                       PH_Atlas=rowMeans(dat[,which(meta$DK_name=="PH_Atlas")]),
+                       XY_Atlas=rowMeans(dat[,which(meta$DK_name=="XY_Atlas")]),
+                       MCO_Atlas=rowMeans(dat[,which(meta$DK_name=="MCO_Atlas")]),
+                       V_Atlas=rowMeans(dat[,which(meta$DK_name=="V_Atlas")]),
+                       WOX_Atlas=rowMeans(dat[,which(meta$DK_name=="WOX_Atlas")]),
+                       EN_Field=rowMeans(dat[,which(meta$DK_name=="EN_Field")]),
+                       MCO_Field=rowMeans(dat[,which(meta$DK_name=="MCO_Field")]),
+                       MZ_Field=rowMeans(dat[,which(meta$DK_name=="MZ_Field")]),
+                       X35S_Field=rowMeans(dat[,which(meta$DK_name=="X35S_Field")]),
+                       COR_LR_Pot=rowMeans(dat[,which(meta$DK_name=="COR_LR_Pot")]),
+                       COR_AR_Pot=rowMeans(dat[,which(meta$DK_name=="COR_AR_Pot")]),
+                       MCO_LR_Pot=rowMeans(dat[,which(meta$DK_name=="MCO_LR_Pot")]),
+                       MCO_AR_Pot=(dat[,which(meta$DK_name=="MCO_AR_Pot")])
+)
+dat<-means_df
+
+eigens_means <-   data.frame(row.names = rownames(t(MEs)), 
+                       EP_Atlas=rowMeans(t(MEs)[,which(meta$DK_name=="EP_Atlas")]),
+                       EXO_Atlas=rowMeans(t(MEs)[,which(meta$DK_name=="EXO_Atlas")]),
+                       COR_Atlas=rowMeans(t(MEs)[,which(meta$DK_name=="COR_Atlas")]),
+                       EN_Atlas=rowMeans(t(MEs)[,which(meta$DK_name=="EN_Atlas")]),
+                       X35S_Atlas=rowMeans(t(MEs)[,which(meta$DK_name=="X35S_Atlas")]),
+                       MZ_Atlas=rowMeans(t(MEs)[,which(meta$DK_name=="MZ_Atlas")]),
+                       ACT_Atlas=rowMeans(t(MEs)[,which(meta$DK_name=="ACT_Atlas")]),
+                       PH_Atlas=rowMeans(t(MEs)[,which(meta$DK_name=="PH_Atlas")]),
+                       XY_Atlas=rowMeans(t(MEs)[,which(meta$DK_name=="XY_Atlas")]),
+                       MCO_Atlas=rowMeans(t(MEs)[,which(meta$DK_name=="MCO_Atlas")]),
+                       V_Atlas=rowMeans(t(MEs)[,which(meta$DK_name=="V_Atlas")]),
+                       WOX_Atlas=rowMeans(t(MEs)[,which(meta$DK_name=="WOX_Atlas")]),
+                       EN_Field=rowMeans(t(MEs)[,which(meta$DK_name=="EN_Field")]),
+                       MCO_Field=rowMeans(t(MEs)[,which(meta$DK_name=="MCO_Field")]),
+                       MZ_Field=rowMeans(t(MEs)[,which(meta$DK_name=="MZ_Field")]),
+                       X35S_Field=rowMeans(t(MEs)[,which(meta$DK_name=="X35S_Field")]),
+                       COR_LR_Pot=rowMeans(t(MEs)[,which(meta$DK_name=="COR_LR_Pot")]),
+                       COR_AR_Pot=rowMeans(t(MEs)[,which(meta$DK_name=="COR_AR_Pot")]),
+                       MCO_LR_Pot=rowMeans(t(MEs)[,which(meta$DK_name=="MCO_LR_Pot")]),
+                       MCO_AR_Pot=(t(MEs)[,which(meta$DK_name=="MCO_AR_Pot")])
+)
+  
+MEs <- t(eigens_means)
+
+plots <- c()
+nm <- 1
+no_mod <- length(unique(modules$colors))
+for (col in unique(modules$colors)) {
+  
+  mod <- rownames(dat)[modules$colors == col]
+  met <- names(met_mod[met_mod==col])
+  
+  layout(matrix(c(1,1,2,3), 2, 2, byrow = TRUE), widths=c(1,1), heights=c(3,2))
+
+  # Plot expression profiles
+  center <- MEs[,paste0("ME", col)]
+  center <- scale(center)
+  
+  no.samples <- ncol(dat)
+  
+  par(xpd = T, mar = c(4,4,4,12))
+  plot(1:no.samples, 
+       center[1:no.samples],
+       xlab = "", ylab = "Expression (Scaled)", 
+       type="b", 
+       lty=1, pch=20, lwd=4, xaxt="n", yaxt="n",
+       main = paste0("Module ",col," (", nm, "/", no_mod, "): ", length(mod), " genes"),
+       col="black",
+       ylim = range(scale(t(dat[modules$colors == col,])))
+  )
+  
+  l <- colnames(dat)
+  l <- gsub("SQR_", "", l)
+  
+  axis(1, at=1:no.samples, labels = FALSE)
+  text(x = 1:no.samples, par("usr")[3] - 0.5, labels = l, 
+       srt = 90, pos = 1, xpd = TRUE, cex=0.8)
+  axis(2, cex.axis=1)
+  box(col=col, lwd=6)
+  
+  corr <- c()
+  
+  idx <- match(mod, rownames(dat))
+  for (j in idx) {
+    g <- t(dat[j,])
+    g <- scale(g)
+    corr <- c(corr, cor(center, g))
+    lines(1:no.samples, 
+         g[1:no.samples],
+         col = "lightgrey")
+  }
+  
+  lines(1:no.samples, center[1:no.samples], type="b", lty=1, pch=20, lwd=4, col="black")
+  
+  m_col <- c("blue","red","green","orange","pink")
+  for (j in 1:length(met)) {
+    m <- t(dat[rownames(dat) == met[j],])
+    m <- scale(m)
+    lines(1:no.samples, m[1:no.samples], lwd=2, col = m_col[j])
+  }
+  
+  legend(no.samples + 0.5,1,c("Eigengene", met), lwd = c(4,rep(2, length(met))), 
+         col = c("black", m_col[1:length(met)]), lty=1, cex = 0.8)
+
+  par(mar=c(4, 4, 1, 1))
+  
+  # Plot expression similarity
+  hist(corr, xlab = "Correlation to eigengene", ylab = "", breaks = seq(-1,1,0.1),
+        main = "", lwd = 2, xlim = c(-1,1))
+  
+  par(mar=c(0, 0, 0, 0))
+  
+  nm <- nm+1
+}
+
+if (FALSE) { # Draw networks
+  
+  A <- adjacency(dat_t,
+                 type = "signed",
+                 power = power,
+                 corFnc = "bicor"
+  )
+  
+  for (col in c("all", unique(modules$colors))) {
+  
+    if (col == "all") {
+      mod <- rownames(dat)
+      met <- names(met_mod[met_mod==col])
+    } else {
+      mod <- rownames(dat)[modules$colors == col]
+      met <- names(met_mod[met_mod==col])
+    }
+    
+    if (length(met) > 0) {
+      
+      if (col == "all") {
+        module_network <- A
+      } else {
+        idx <- modules$colors == col
+        module_network <- A[idx,idx]
+        #diag(module_network) <- 0
+        rownames(module_network) <- rownames(dat[idx,])
+        colnames(module_network) <- rownames(dat[idx,])
+      }
+    
+      I <- IntGenes
+      I <- rbind(I,data.frame(ID = met, Symbol = met))
+      
+      net_idx <- match(I$ID, rownames(module_network))
+      int_idx <- which(!is.na(net_idx))
+      net_idx <- net_idx[!is.na(net_idx)]
+      
+      thr <- 0.8
+      
+      if (FALSE) {
+        hist(module_network, xlab = "Adjacency", ylab = "", breaks = seq(0,1,0.05),
+           main = "", col = "red", lwd=5)
+        abline(v=thr)
+        (sum(module_network > thr) - nrow(module_network))/2
+      }
+      
+      altnames <- rep("", nrow(module_network))
+      altnames[net_idx] <- I$Symbol[int_idx]
+      
+      network <- exportNetworkToCytoscape(adjMat = module_network,
+                                          nodeFile = paste0("nodes-", col, ".txt"), 
+                                          edgeFile = paste0("edges-", col, ".txt"), 
+                                          threshold = thr, 
+                                          weighted = TRUE,
+                                          altNodeNames = altnames,
+                                          nodeAttr = modules$colors[idx]
+                                          )
+    }
+  }
+}
+
+```
+
+## Modules - Genes information
+
+A table with information for the genes in the network including module membership and network connectivity. Filter on columns to see e.g. genes from one module.
+
+```{r gene_info, warning=FALSE}
+
+idx <- match(rownames(dat), annot$ID)
+subannot <- annot[idx,]
+subannot$ID <- rownames(dat)
+
+subannot <- cbind(subannot, degrees[,c(1,2,4)])
+subannot$kTotal <- format(subannot$kTotal, digits=0)
+subannot$kWithin <- format(subannot$kWithin, digits=0)
+subannot$kDiff <- format(subannot$kDiff, digits=0)
+subannot$Module <- modules$colors
+
+idx <- match(IntGenes$ID, subannot$locusName)
+subannot$ManualAnnot <- rep("", nrow(subannot))
+#subannot$ManualAnnot[idx] <- IntGenes$Symbol
+
+datatable(subannot, rownames = FALSE, filter = "top")
+```
+
+```{r}
+
+write.csv(subannot,file = "20191126-0.35-Modules-withMCO.csv")
+```
+
+##Hub Genes
+
+The gene that has the maximum connections with other genes in a module
+```{r hub_genes, warning=FALSE}
+Hub_genes <- chooseTopHubInEachModule(datExpr = dat, 
+                                      colorh = modules,
+                                      power = power, 
+                                      type = "unsigned",
+                                      omitColors = "grey")
+  #This doesn't work..yet 
+                            
+                      
+```
