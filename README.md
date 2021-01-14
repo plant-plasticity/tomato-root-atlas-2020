@@ -30,3 +30,8 @@ These detailed bench protocols describe the methods as carried out in the Tomato
 - [Data on GEO]
 - [eFP browser]
 
+
+## Analysis pipeline summaries
+
+<img src="https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Flowcharts/Figure_S13_multispecies%20overview.pdf"> 
+[Flowchart for multispecies analysis.] An overview of the pipeline and methods used for exploring the conservation of homologous cell types and tissues among tomato, Arabidopsis and rice. Ath=Arabidopsis thaliana; Osa=Oryza sativa; Sly=Solanum lycopersicum; IQR= interquartile range; TPM=transcript per million; GO=gene ontology; CTEG=cell type/tissue enriched genes.
