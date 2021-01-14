@@ -1,5 +1,5 @@
 # Tomato-root-atlas-2020
-Code and supplementary files used in analysis for Tomato Root Atlas (2020)
+Code and resources for Tomato Root Atlas (2020)
 
 **Title:** Novelty, conservation, and repurposing of gene function in root cell type development
 
@@ -13,11 +13,13 @@ Code and supplementary files used in analysis for Tomato Root Atlas (2020)
 
 
 ## Code used by topic (*in progress*)
-- [Differential Gene Expression by limma-voom]()
-
+- [Obtaining RNA-seq read counts: Trimming, Kallisto and STAR](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Scripts/Trimming_Kallist_STAR_mapping.sh)
+- [Relative differential expression: Roku](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Roku)
+- [Co-expression network analysis: WGCNA ](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Scripts/WGCNA-Tomato-ATLAS.rmd)
+- [More to come...]
 
 ## Protocols
-These bench protocols describe the methods as carried out in the Tomato Root Atlas paper.
+These detailed bench protocols describe the methods as carried out in the Tomato Root Atlas paper.
 - [TRAP purification of translating ribosomes](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Protocols/TRAP%20Atlas.pdf)
 - [RNA-seq library preparation from TRAP](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Protocols/Brads%20Rapid%20Ravi%20for%20low%20mRNA%20Atlas.pdf)
 - [INTACT isolation of nuclei](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Protocols/INTACT%20Atlas.pdf)
@@ -25,6 +27,6 @@ These bench protocols describe the methods as carried out in the Tomato Root Atl
 
 
 ## Other resources by topic (*in progress*)
-- [Data on GEO]()
-- [eFP browser]()
+- [Data on GEO]
+- [eFP browser]
 
