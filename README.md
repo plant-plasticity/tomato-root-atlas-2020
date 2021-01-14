@@ -12,12 +12,12 @@ Code and supplementary files used in analysis for Tomato Root Atlas (2020)
 > TBC
 
 
-
 ## Code used by topic (*in progress*)
 - [Differential Gene Expression by limma-voom]()
 
 
 ## Protocols
+These bench protocols describe the methods as carried out in the Tomato Root Atlas paper.
 - [TRAP purification of translating ribosomes](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Protocols/TRAP%20Atlas.pdf)
 - [RNA-seq library preparation from TRAP](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Protocols/Brads%20Rapid%20Ravi%20for%20low%20mRNA%20Atlas.pdf)
 - [INTACT isolation of nuclei](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Protocols/INTACT%20Atlas.pdf)
@@ -25,5 +25,6 @@ Code and supplementary files used in analysis for Tomato Root Atlas (2020)
 
 
 ## Other resources by topic (*in progress*)
+- [Data on GEO]()
 - [eFP browser]()
 
