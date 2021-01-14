@@ -33,17 +33,17 @@ These detailed bench protocols describe the methods as carried out in the Tomato
 
 ## Analysis pipeline summaries
 
-<img src="https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Flowcharts/Figure_S13_multispecies%20overview.jpg" width="1000">
+<img src="https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Flowcharts/Figure_S13_multispecies%20overview.jpg" width="700">
 
 **Flowchart for multispecies analysis.** An overview of the pipeline and methods used for exploring the conservation of homologous cell types and tissues among tomato, Arabidopsis and rice. Ath=Arabidopsis thaliana; Osa=Oryza sativa; Sly=Solanum lycopersicum; IQR= interquartile range; TPM=transcript per million; GO=gene ontology; CTEG=cell type/tissue enriched genes.
 
 
-<img src="https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Flowcharts/Figure_S20_ATACseq_flowchart.jpg" width="1000">
+<img src="https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Flowcharts/Figure_S20_ATACseq_flowchart.jpg" width="700">
 
 **Flowchart for identification and annotation of ATAC-seq data.** Data analysis overview for methods used for identification of replicate transposase hypersensitive sites.
 
 
 
-<img src="https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Flowcharts/Figure_S26_NetworkFlowchart.jpg" width="1000">
+<img src="https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Flowcharts/Figure_S26_NetworkFlowchart.jpg" width="700">
 
 **Unique cell type network construction pipeline.** Data analysis overview for methods used to construct inferred cell type-unique regulatory networks.
