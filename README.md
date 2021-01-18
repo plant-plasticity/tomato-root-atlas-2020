@@ -1,9 +1,9 @@
 # Tomato-root-atlas-2020
-Code and resources for Tomato Root Atlas (2020)
+Code and resources for Tomato Root Atlas
 
 **Title:** Novelty, conservation, and repurposing of gene function in root cell type development
 
-**Authors:**  Kaisa Kajala, Mona Gouran, Lidor Shaar-Moshe, G. Alex Mason, Joel Rodriguez-Medina1, Dorota Kawa, Germain Pauluzzi, Mauricio Reynoso, Alex Canto-Pastor, Concepcion Manzano, Vincent Lau, Mariana A. S. Artur, Donnelly A. West, Sharon B. Gray, Alexander T. Borowsky, Bryshal P. Moore, Andrew I. Yao, Kevin W. Morimoto, Marko Bajic, Elide Formentin, Niba Nirmal, Alan Rodriguez, Asher Pasha, Roger B. Deal, Daniel Kliebenstein, Torgeir R. Hvidsten, Nicholas J. Provart, Neelima Sinha, Daniel E. Runcie, Julia Bailey-Serres, Siobhan M. Brady
+**Authors:**  Kaisa Kajala, Mona Gouran, Lidor Shaar-Moshe, G. Alex Mason, Joel Rodriguez-Medina, Dorota Kawa, Germain Pauluzzi, Mauricio Reynoso, Alex Canto-Pastor, Concepcion Manzano, Vincent Lau, Mariana A. S. Artur, Donnelly A. West, Sharon B. Gray, Alexander T. Borowsky, Bryshal P. Moore, Andrew I. Yao, Kevin W. Morimoto, Marko Bajic, Elide Formentin, Niba Nirmal, Alan Rodriguez, Asher Pasha, Roger B. Deal, Daniel Kliebenstein, Torgeir R. Hvidsten, Nicholas J. Provart, Neelima Sinha, Daniel E. Runcie, Julia Bailey-Serres, Siobhan M. Brady
 
 **Journal:** TBC
 
