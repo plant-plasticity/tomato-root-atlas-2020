@@ -16,7 +16,8 @@ Code and resources for Tomato Root Atlas (2020)
 - [Obtaining RNA-seq read counts: Trimming, Kallisto and STAR](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Scripts/Trimming_Kallist_STAR_mapping.sh)
 - [Relative differential expression: Roku](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Roku)
 - [Co-expression network analysis: WGCNA ](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Scripts/WGCNA-Tomato-ATLAS.rmd)
-- [More to come...]
+- [ATAC-aseq analysis](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/ATAC)
+- [Motif enrichment](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Motif_enrichment)
 
 ## Protocols
 These detailed bench protocols describe the methods as carried out in the Tomato Root Atlas paper.
