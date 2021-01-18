@@ -1,0 +1,1214 @@
+---
+title: "ATLAS motif enrichment for cell type promoters"
+author: "G. Alex Mason"
+date: "12/5/2019"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 2
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+highlight: pygments
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Intro
+
+#Updated on 10/24/20 to reflect the sibtratction of of EXO gene
+
+
+This is the sister file to ATLAS_motif_enrichment_celltype_specific_THSs_batch_corrected.Rmd. This file is to serve as a neat and tidy summary of the work we did to find cell type-specific TF motifs. Most of the original analyses were done with the non-batch corrected gene lists, so because a great deal pf work needs to be redone anyways, this file was created. If your curious to look at the orignal shell and R scripts please see the following directory: E:/BRADY_LAB/ATLAS/ATAC_data_analysis_and_methods/ATLAS_motif_networks
+
+There are many steps in this analysis and I will do my best to name the original scripts that were used as well as, but this file is really just an organized copy.
+
+## Steps for the identification of cell type-specific TF motifs
+
+1. Find input sequences
+ 
+  a. For promoters, find 1-kb upstream regions of the genes of interests, then use bedtools to extract the sequences from SL3.0.fasta
+
+2. Perform motif enrichment with MEME suite's AME and the custom database I created.
+
+3. Parse enriched motifs with matches to the expressolog list we have.
+
+4. Filter out motifs with an SL expressolog that has less than 1 TPM in the given cell type.
+
+5. Make network files!
+
+Seems very simple and straightforward, right? 
+
+
+## Find 1-kb upstream regions of all the genes 
+
+These will be our promoter sequences for motif enrichment
+
+```{r makePromoters, engine='bash', eval=FALSE}
+# Use bedops to change GFF to bed file
+# This step has been done, but this how I did it previously
+module load bedops/2.4.33
+gff2bed < /share/brady/Public_data/SL_genomes/SL3.0/Annotations/ITAG3.2_genes_only.gff > /share/brady/Public_data/SL_genomes/SL3.0/Annotations/ITAG3.2_genes_only.bed
+# text editor to manipulate the file a little to make it prettier
+
+## Seperate genes into (+) vs. (-) strand
+# This step has been done, but this how I did it previously
+# (+)
+awk '$6~ /+/' /share/brady/Public_data/SL_genomes/SL3.0/Annotations/ITAG3.2_genes_only.bed > /share/brady/Public_data/SL_genomes/SL3.0/Annotations/ITAG3.2_plus_genes_only.bed
+#Make proximal promoter features and re-annotate as proximal_promoter
+bedtools flank -i /share/brady/Public_data/SL_genomes/SL3.0/Annotations/ITAG3.2_plus_genes_only.bed -g /share/brady/Public_data/SL_genomes/SL3.0/Annotations/S_lycopersicum_chromosomes.3.00.genome -l 1000 -r 0 > /share/brady/Public_data/SL_genomes/SL3.0/Annotations/dummy.bed
+awk '$8="1kb_promoter"' OFS='\t' /share/brady/Public_data/SL_genomes/SL3.0/Annotations/dummy.bed > /share/brady/Public_data/SL_genomes/SL3.0/Annotations/ITAG3.2_genes_1kb_plusstrandonly_upstream.bed
+
+# (-)
+awk '$6~ /-/' /share/brady/Public_data/SL_genomes/SL3.0/Annotations/ITAG3.2_genes_only.bed > /share/brady/Public_data/SL_genomes/SL3.0/Annotations/ITAG3.2_minus_genes_only.bed
+# Make proximal promoter features and re-annotate as proximal_promoter
+bedtools flank -i /share/brady/Public_data/SL_genomes/SL3.0/Annotations/ITAG3.2_minus_genes_only.bed -g /share/brady/Public_data/SL_genomes/SL3.0/Annotations/S_lycopersicum_chromosomes.3.00.genome -l 0 -r 1000 > /share/brady/Public_data/SL_genomes/SL3.0/Annotations/dummy.bed
+awk '$8="1kb_promoter"' OFS='\t' /share/brady/Public_data/SL_genomes/SL3.0/Annotations/dummy.bed > /share/brady/Public_data/SL_genomes/SL3.0/Annotations/ITAG3.2_genes_1kb_minusstrandonly_upstream.bed
+
+# Combine them all
+cat /share/brady/Public_data/SL_genomes/SL3.0/Annotations/ITAG3.2_genes_1kb_plusstrandonly_upstream.bed /share/brady/Public_data/SL_genomes/SL3.0/Annotations/ITAG3.2_genes_1kb_minusstrandonly_upstream.bed > /share/brady/Public_data/SL_genomes/SL3.0/Annotations/dummy.bed
+
+# sort with bedtools
+bedtools sort -i /share/brady/Public_data/SL_genomes/SL3.0/Annotations/dummy.bed > /share/brady/Public_data/SL_genomes/SL3.0/Annotations/ITAG3.2_genes_1kb_upstream.sorted.bed
+
+# Now do some ID splitting to remove them off of the gene annotations using Notepad++
+# Here is an example of how to do this
+# split .2.1 off genes in enriched lists
+cut -d "." -f1 */*_genes.txt > */*_genes_IDs_split.txt
+
+cd /share/brady/people/AlexMason/ATLAS/ATLAS_promoter_motif_enrichment
+
+# make a symbolic link for the promoter bed file
+ln -s /share/brady/Public_data/SL_genomes/SL3.0/Annotations/ITAG3.2_genes_1kb_upstream.sorted.bed Promoter_bed
+
+# make symbolic link for the location of the gene lists
+ln -s /share/brady/people/AlexMason/ATLAS/Gene_lists Gene_lists 
+
+# make a directory for each cell type
+mkdir gCOR
+mkdir iCOR
+mkdir EP
+mkdir EN
+mkdir EXO
+mkdir MCO
+mkdir MZ
+mkdir PH
+mkdir V
+mkdir WOX
+mkdir XY
+
+```
+
+```{r findPromoterRegions1, eval=FALSE}
+
+setwd("/share/brady/people/AlexMason/ATLAS/ATLAS_promoter_motif_enrichment")
+
+# name cell types
+cellTypes <- c("EP","EN","EXO","gCOR","iCOR","MCO","MZ","PH","V","WOX","XY")
+
+# read in promoter data 
+my.data = read.delim("/share/brady/Public_data/SL_genomes/SL3.0/Annotations/ITAG3.2_genes_1kb_upstream.sorted.bed", sep="\t", header=FALSE)
+names(my.data) = c("Chr","Start","End","GeneID","mys.1","Strand","Annotator","Feature_type","mys.2","Gene_information")
+
+for (i in cellTypes) {
+  # read in gene names
+  my.genes = read.delim(paste("/share/brady/people/AlexMason/ATLAS/Gene_lists/", i, ".txt", sep=''), sep="\t")
+  names(my.genes) <- "GeneID"
+  overlap <- merge(my.data, my.genes, by="GeneID")
+  write.table(overlap, file=paste(i, "/", i,  "_1kb_promoters.txt",sep=''), col.names=FALSE, row.names=FALSE, sep='\t', quote=FALSE)
+}
+
+```
+
+```{r findPromoterRegions2, engine='bash', eval=FALSE}
+#rearrange columns and make sure the files are sorted
+
+bedtools2/2.27.0
+
+awk -v OFS='\t' '{print $2,$3,$4,$1,$5,$6,$7,$8,$9,$10}' gCOR/gCOR_1kb_promoters.txt | bedtools sort > gCOR/gCOR_1kb_promoters.sorted.bed
+awk -v OFS='\t' '{print $2,$3,$4,$1,$5,$6,$7,$8,$9,$10}' iCOR/iCOR_1kb_promoters.txt | bedtools sort > iCOR/iCOR_1kb_promoters.sorted.bed
+awk -v OFS='\t' '{print $2,$3,$4,$1,$5,$6,$7,$8,$9,$10}' EP/EP_1kb_promoters.txt | bedtools sort > EP/EP_1kb_promoters.sorted.bed
+awk -v OFS='\t' '{print $2,$3,$4,$1,$5,$6,$7,$8,$9,$10}' EN/EN_1kb_promoters.txt | bedtools sort > EN/EN_1kb_promoters.sorted.bed
+awk -v OFS='\t' '{print $2,$3,$4,$1,$5,$6,$7,$8,$9,$10}' EXO/EXO_1kb_promoters.txt | bedtools sort > EXO/EXO_1kb_promoters.sorted.bed
+awk -v OFS='\t' '{print $2,$3,$4,$1,$5,$6,$7,$8,$9,$10}' MCO/MCO_1kb_promoters.txt | bedtools sort > MCO/MCO_1kb_promoters.sorted.bed
+awk -v OFS='\t' '{print $2,$3,$4,$1,$5,$6,$7,$8,$9,$10}' MZ/MZ_1kb_promoters.txt | bedtools sort > MZ/MZ_1kb_promoters.sorted.bed
+awk -v OFS='\t' '{print $2,$3,$4,$1,$5,$6,$7,$8,$9,$10}' PH/PH_1kb_promoters.txt | bedtools sort > PH/PH_1kb_promoters.sorted.bed
+awk -v OFS='\t' '{print $2,$3,$4,$1,$5,$6,$7,$8,$9,$10}' V/V_1kb_promoters.txt | bedtools sort > V/V_1kb_promoters.sorted.bed
+awk -v OFS='\t' '{print $2,$3,$4,$1,$5,$6,$7,$8,$9,$10}' WOX/WOX_1kb_promoters.txt | bedtools sort > WOX/WOX_1kb_promoters.sorted.bed
+awk -v OFS='\t' '{print $2,$3,$4,$1,$5,$6,$7,$8,$9,$10}' XY/XY_1kb_promoters.txt | bedtools sort > XY/XY_1kb_promoters.sorted.bed
+
+rm gCOR/gCOR_1kb_promoters.txt
+rm iCOR/iCOR_1kb_promoters.txt
+rm EP/EP_1kb_promoters.txt
+rm EN/EN_1kb_promoters.txt
+rm EXO/EXO_1kb_promoters.txt
+rm MCO/MCO_1kb_promoters.txt
+rm MZ/MZ_1kb_promoters.txt
+rm PH/PH_1kb_promoters.txt
+rm V/V_1kb_promoters.txt
+rm WOX/WOX_1kb_promoters.txt
+rm XY/XY_1kb_promoters.txt
+
+```
+
+
+```{r findPromoterSequences, engine='bash', eval=FALSE}
+cd /share/brady/people/AlexMason/ATLAS/ATLAS_promoter_motif_enrichment
+
+#make a symbolic link for the genome fasta file
+ln -s /share/brady/Public_data/SL_genomes/SL3.0/S_lycopersicum_chromosomes.3.00.fa Slgenome
+
+# now get the fasta sequences
+
+#genCOR
+bedtools getfasta -name -fi Slgenome -bed gCOR/gCOR_1kb_promoters.sorted.bed > gCOR/gCOR_1kb_promoters.sorted.fasta
+#innerCOR
+bedtools getfasta -name -fi Slgenome -bed iCOR/iCOR_1kb_promoters.sorted.bed > iCOR/iCOR_1kb_promoters.sorted.fasta
+#EN
+bedtools getfasta -name -fi Slgenome -bed EN/EN_1kb_promoters.sorted.bed > EN/EN_1kb_promoters.sorted.fasta
+#EP
+bedtools getfasta -name -fi Slgenome -bed EP/EP_1kb_promoters.sorted.bed > EP/EP_1kb_promoters.sorted.fasta
+#EXO
+bedtools getfasta -name -fi Slgenome -bed EXO/EXO_1kb_promoters.sorted.bed > EXO/EXO_1kb_promoters.sorted.fasta
+#MCO
+bedtools getfasta -name -fi Slgenome -bed MCO/MCO_1kb_promoters.sorted.bed > MCO/MCO_1kb_promoters.sorted.fasta
+#MZ
+bedtools getfasta -name -fi Slgenome -bed MZ/MZ_1kb_promoters.sorted.bed > MZ/MZ_1kb_promoters.sorted.fasta
+#PH
+bedtools getfasta -name -fi Slgenome -bed PH/PH_1kb_promoters.sorted.bed > PH/PH_1kb_promoters.sorted.fasta
+#V
+bedtools getfasta -name -fi Slgenome -bed V/V_1kb_promoters.sorted.bed > V/V_1kb_promoters.sorted.fasta
+#WOX
+bedtools getfasta -name -fi Slgenome -bed WOX/WOX_1kb_promoters.sorted.bed > WOX/WOX_1kb_promoters.sorted.fasta
+#XY
+bedtools getfasta -name -fi Slgenome -bed XY/XY_1kb_promoters.sorted.bed > XY/XY_1kb_promoters.sorted.fasta
+
+```
+
+```{r motifPromoterEnrichment, engine='bash', eval=FALSE}
+module load meme/5.0.2
+
+# make a symbolic link for the motif file
+ln -s /share/brady/people/AlexMason/Custom_motif_databases/ArabidopsisDapv1_cisBP_PBM_101419.meme Motifs.meme
+
+# perform motif enrichment
+ame --verbose 1 --o gCOR/gCOR_AME --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 10.0 --control --shuffle-- --kmer 2 gCOR/gCOR_1kb_promoters.sorted.fasta Motifs.meme
+
+ame --verbose 1 --o iCOR/iCOR_AME --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 10.0 --control --shuffle-- --kmer 2 iCOR/iCOR_1kb_promoters.sorted.fasta Motifs.meme
+
+ame --verbose 1 --o EN/EN_AME --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 10.0 --control --shuffle-- --kmer 2 EN/EN_1kb_promoters.sorted.fasta Motifs.meme
+
+ame --verbose 1 --o EP/EP_AME --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 10.0 --control --shuffle-- --kmer 2 EP/EP_1kb_promoters.sorted.fasta Motifs.meme
+
+ame --verbose 1 --o EXO/EXO_AME --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 10.0 --control --shuffle-- --kmer 2 EXO/EXO_1kb_promoters.sorted.fasta Motifs.meme
+
+ame --verbose 1 --o MCO/MCO_AME --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 10.0 --control --shuffle-- --kmer 2 MCO/MCO_1kb_promoters.sorted.fasta Motifs.meme
+
+ame --verbose 1 --o MZ/MZ_AME --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 10.0 --control --shuffle-- --kmer 2 MZ/MZ_1kb_promoters.sorted.fasta Motifs.meme
+
+ame --verbose 1 --o PH/PH_AME --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 10.0 --control --shuffle-- --kmer 2 PH/PH_1kb_promoters.sorted.fasta Motifs.meme
+
+ame --verbose 1 --o V/V_AME --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 10.0 --control --shuffle-- --kmer 2 V/V_1kb_promoters.sorted.fasta Motifs.meme
+
+ame --verbose 1 --o WOX/WOX_AME --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 10.0 --control --shuffle-- --kmer 2 WOX/WOX_1kb_promoters.sorted.fasta Motifs.meme
+
+ame --verbose 1 --o XY/XY_AME --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 10.0 --control --shuffle-- --kmer 2 XY/XY_1kb_promoters.sorted.fasta Motifs.meme
+
+```
+
+## Identify motifs that are uniquely significant in each cell type
+
+Here, I kept out gCOR because this represent promoters of genes that are found in both EXO and COR. However, I could be convinced otherwise
+
+```{r uniqueMotifs, eval=FALSE}
+# doing this on the cluster
+#setwd("/share/brady/people/AlexMason/ATLAS/ATLAS_promoter_motif_enrichment")
+setwd("E:/BRADY_LAB/ATLAS/ATLAS_promoter_motif_enrichment")
+
+# data wrangling
+library(tidyverse)
+library(matrixStats)
+library(UpSetR)
+library(BioGenerics)
+
+# plot making
+library(pheatmap)
+library(UpSetR)
+library(gplots)
+library(ggpubr)
+
+# all of the color options
+library(RColorBrewer)
+library(viridis)
+library(LaCroixColoR)
+
+
+### Get all AME tsv files
+AMEfiles <- list.files(path = "AMEoutput_promoters",recursive = T,pattern = "ame.tsv",full.names = T)
+
+## Get cell type names
+CellTypes <- sapply(AMEfiles, function(x){gsub("AMEoutput_promoters/|_ame.tsv","",x)})
+names(AMEfiles) <- CellTypes
+CellTypes
+## Read tables and compile
+AMEtableList <- lapply(AMEfiles, function(x){ as_tibble( read.delim(x,stringsAsFactors = F) ) } )
+head(AMEtableList[[1]])
+
+
+####################################
+altMotifNames <- Reduce("rbind",lapply(AMEtableList,"[",c("motif_ID","motif_alt_ID")))
+head(altMotifNames)
+altMotifNames <- altMotifNames[!duplicated(altMotifNames$motif_ID),] #Remove duplicates
+altMotifNames <- data.frame(altMotifNames,stringsAsFactors = F)
+
+altMotifNames$source <- sapply(strsplit(altMotifNames$motif_ID,"_"),function(x){x[grep("col|colamp|Sullivan|Weirauch|Franco",x)]})
+
+rownames(altMotifNames) <- altMotifNames$motif_ID
+head(altMotifNames)
+# These should be the same length
+length(unique(altMotifNames$motif_ID))
+dim(altMotifNames)
+
+
+AME_MotifSource <- lapply(AMEtableList,function(x){
+ #x <- AMEtableList[[1]]
+  #x$source <- sapply(strsplit(x$motif_ID,"_"),function(x){x[grep("col|colamp|Sullivan|Weirauch|Franco",x)]})
+  x$MotifSource <- x$motif_ID #paste0(x$motif_ID,"_",x$source)
+  return(x)
+  })
+
+## Get motifs represented in at least once cell type
+MotifNames <- Reduce(union,lapply(AME_MotifSource,"[[","MotifSource"))
+length(MotifNames)
+head(MotifNames)
+## Agg to matrix: p-vals, then binary.
+motifPVal <- matrix(NA,nrow = length(MotifNames), ncol = length(CellTypes),dimnames = list(MotifNames,CellTypes))
+
+for (each in CellTypes){
+  cat ("Filling:",each,"\n")
+  tmp <- AME_MotifSource[[each]]
+  motifPVal[tmp$MotifSource,each] <- tmp$p.value
+}
+
+head(motifPVal)
+tail(motifPVal)
+dim(motifPVal)
+
+motif_binary <- ifelse(!is.na(motifPVal),1,0)
+head(motif_binary)
+tail(motif_binary)
+
+dir.create("barbera_output")
+save(motif_binary,file = "barbera_output/motif_binary.RData")
+
+### Analysis of unique/shared motifs
+################################################
+
+
+### Binary 
+dat <- as.matrix(motif_binary)
+#cell = ifelse(nrow(dat) < 50,4,5)
+#fsize = cell*.6
+
+
+
+
+allUnique <- as.data.frame(dat[rowSums(dat) == 1,])
+
+write.table(allUnique,file = "all_unique_motifs_102720.tsv",quote = F,sep = "\t")
+
+#THEN PHYSICALLY SPERATED THE IDs in Excel. I know, very ugly.
+
+CellTypes <- c('EN', 'EP', 'EXO', 'iCOR', 'MCO', 'MZ', 'PH', 'V', 'WOX', 'XY')
+
+for (CT in CellTypes){
+  my.motifs <- read.delim(paste('E:/BRADY_LAB/ATLAS/ATLAS_promoter_motif_enrichment/UniqueMotifs_perCellType/', CT, '_unique_IDs.txt', sep=''), sep='\t', header=TRUE)
+  #print(head(my.motifs))
+  my.AME <- read.delim(paste('E:/BRADY_LAB/ATLAS/ATLAS_promoter_motif_enrichment/', CT, '/', CT, '_AME/', CT, '_ame.tsv', sep=''), sep='\t', header=TRUE)
+  #print(head(my.AME))
+  my.merge <- merge(my.motifs, my.AME, by='motif_ID')
+  #print(head(my.merge))
+  write.table(my.merge, file = paste('E:/BRADY_LAB/ATLAS/ATLAS_promoter_motif_enrichment/UniqueMotifs_perCellType/', CT, '_unique_ame.tsv',sep=''), row.names=FALSE, quote = F,sep = "\t")
+
+}
+
+
+```
+
+# So it appears that NUC and NAP are no longer in the EXO network, but now there are a quite a few HSFs, which is certainly interesting.
+# Update, EXO no longer has as many HSF motifs with the one gene Lidor said to take out. GACK!
+
+## Find expressologs and evaluate their expression in tomato cell types
+In this case, I only want positivelt correlated expressologs that are expressed to 1 tpm in the cell type of interest. Please look at 'ATLAS_provart_expressologs_motif_analysis_071819.R' for the original code.
+
+```{r expressologCellTypeExpression, eval=FALSE}
+library(matrixStats)
+library(gplots)
+library(RColorBrewer)
+library(tidyverse)
+
+setwd('E:/BRADY_LAB/ATLAS/ATLAS_promoter_motif_enrichment/UniqueMotifs_perCellType')
+
+cellTypes <- c("EP","EN","EXO","iCOR","MCO", "MZ","PH", "V", "WOX", "XY")
+
+#XY does not have expressologs
+#EN has one expressolog that is not highly expressed
+
+
+# Make cell type-specific expression in TPMs
+ct.expression <- read.delim("E:/BRADY_LAB/20180920_ATLAS_ITAG3.2_Kallisto_quantile_norm_median_tpm_nocontrol.csv", sep=',', na.strings='NA')
+names(ct.expression) <- c("X", "iCOR", "EN", "EP", "EXO", "MCO", "MZ","PH", "V", "WOX", "XY")
+
+#Lidor's expressolog file (positive correlation only)
+expressologs.data <- read.delim('E:/BRADY_LAB/Custom_motif_databases/DAPseq_cisBP_PBM_LSMexpressologs_positiveVals_102720.tsv', sep='\t')
+
+########################################
+#Filtering and writing results to file##
+########################################
+# XY does not have an expressolog for ANAC050
+
+for (i in cellTypes){
+	
+  #Arabidopsis motifs that were unique to a given cell type
+	at.genes <- read.delim(paste(i,"_unique_ame.tsv", sep=''), sep='\t')
+	
+	#Find the overlap between unique motifs and the expressologs
+	flt.expressologs.int <- merge(at.genes, expressologs.data, by = 'motif_ID')
+		#Filter based expressed correlation (SSC value) to get ortholog with the highest correlation
+		#flt.expressologs.int <- expressologs.int %>%
+			#arrange(gene.ID, desc(SCC_Value)) %>%
+			#group_by(gene.ID) %>%
+			#slice(1) %>%
+			#ungroup()
+		
+	#make a row variable denoting which gene is the ortholog of what
+	flt.expressologs.int$solyc.genes <- paste(flt.expressologs.int$Solyc_ID, flt.expressologs.int$motif_alt_ID.x, sep='_')
+
+ 
+  #filter for expression by genes that have >= 1 TPM
+	solyc.express <- merge(ct.expression, flt.expressologs.int, by.x='X', by.y='Solyc_ID')
+	
+
+	#from here up for new heat maps
+
+	#Filter for genes with >= 1 tpm
+	flt.solyc.express <- solyc.express[solyc.express[[i]] >= 1, ]
+	##these files are used for SIF file making##
+	write.table(flt.solyc.express, file = paste('E:/BRADY_LAB/ATLAS/ATLAS_promoter_motif_enrichment/', i, '_uniquePosExpressologs.csv',sep=''), row.names=FALSE, quote = F,sep = ",")
+  }
+
+
+
+#########################
+#Heat maps of expression#
+#########################
+cellTypes <- c("EP","EXO", "MZ", "WOX")
+	
+for (i in cellTypes){
+	
+  #Arabidopsis motifs that were unique to a given cell type
+	at.genes <- read.delim(paste(i,".txt", sep=''), sep='\t')
+	
+	#Find the overlap between unique motifs and the expressologs
+	flt.expressologs.int <- merge(at.genes, expressologs.data, by.x = 'motif', by.y = 'altID')
+
+	#make a row variable denoting which gene is the ortholog of what
+	flt.expressologs.int$solyc.genes <- paste(flt.expressologs.int$SpeciesB, flt.expressologs.int$motif, sep='_')
+ 
+  #filter for expression by genes that have >= 1 TPM
+	solyc.express <- merge(ct.expression, flt.expressologs.int, by.x='X', by.y='SpeciesB')	
+	
+	#filter for genes of interest only
+	solyc.express <- merge(ct.expression, flt.expressologs.int, by.x = 'X', by.y = 'SpeciesB')
+	solyc.express[solyc.express < 1] <- NA
+	
+	## make dataframe
+	# assign labels in column 1 to "rnames"
+	rnames <- solyc.express[,17]
+	
+	# transform column 9-18 into a matrix
+	mat_genes <- data.matrix(solyc.express[,2:11])
+ 
+  # assign row names
+	rownames(mat_genes) <- rnames
+
+	pdf(paste(i, "_1kb_promoter_unique_motifs_Lidor_posExpressologs_heatmap_ct_expression_102620.pdf", sep=''), height=12, width=12)
+		 #assign color palette
+	   color.palette  <- c(brewer.pal(9, "GnBu"))
+	 	 heatmap.2(mat_genes,
+		 scale = c("none"),
+		 colsep=c(1:10),
+		 rowsep=c(1:1251),  
+		 sepwidth=c(.025, .025),
+		 sepcolor="black",
+		 main = paste("TPM of Solyc expressologs for unique", i, "motifs",  sep=' '),
+		 notecol="black",
+		 density.info="none",
+		 trace="none",
+		 Rowv = FALSE, 
+		 Colv=FALSE,
+		 margins =c(12,16),
+		 col=color.palette ,
+		 dendrogram="none",
+		 na.col='grey',
+			)
+	dev.off()
+
+}
+
+#########################
+#Barplots of expression#
+#########################
+cellTypes <- c("iCOR", "MCO", "PH", "V")
+	
+for (i in cellTypes){
+	
+  #Arabidopsis motifs that were unique to a given cell type
+	at.genes <- read.delim(paste(i,".txt", sep=''), sep='\t')
+	
+	#Find the overlap between unique motifs and the expressologs
+	flt.expressologs.int <- merge(at.genes, expressologs.data, by.x = 'motif', by.y = 'altID')
+
+	#make a row variable denoting which gene is the ortholog of what
+	flt.expressologs.int$solyc.genes <- paste(flt.expressologs.int$SpeciesB, flt.expressologs.int$motif, sep='_')
+ 
+  #filter for expression by genes that have >= 1 TPM
+	solyc.express <- merge(ct.expression, flt.expressologs.int, by.x='X', by.y='SpeciesB')	
+	
+	#filter for genes of interest only
+	solyc.express <- merge(ct.expression, flt.expressologs.int, by.x = 'X', by.y = 'SpeciesB')
+	solyc.express[solyc.express < 1] <- NA
+	
+	## make dataframe
+	# assign labels in column 1 to "rnames"
+	rnames <- solyc.express[,17]
+	
+	# transform column 9-18 into a matrix
+	mat_genes <- data.matrix(solyc.express[,2:11])
+ 
+  # assign row names
+	rownames(mat_genes) <- rnames
+
+	pdf(paste(i, "_1kb_promoter_unique_motifs_Lidor_posExpressologs_barplot_ct_expression_102620.pdf", sep=''), height=12, width=12)
+  barplot(mat_genes, legend.text='TRUE')
+	dev.off()
+
+}
+
+```
+
+
+
+
+## Perform motif enrichment so that every motif is evaulated and reported
+
+The goal here is to make a heatmap of -log10(padj) values for motifs that are significant in at least one cell type. Hopefully, something like this will make it into the paper. I'm also filtering out motifs that don't have an expressolog in tomoato, but maybe that step is overkill here. 
+
+```{r motifPromoterEnrichmentMegaHeatmap, engine='bash', eval=FALSE}
+module load meme/5.0.2
+
+#now updated minus the Lidor's gene for EXO
+
+cd /share/brady/people/AlexMason/ATLAS/ATLAS_motif_enrichment_megaHeatmap/Promoter_motifs
+
+#make a symbolic link so that I don't have to type as much stuff
+ln -s /share/brady/people/AlexMason/ATLAS/ATLAS_promoter_motif_enrichment ATLAS_promoter_motif_enrichment
+
+# make a symbolic link for the motif file
+ln -s /share/brady/people/AlexMason/Custom_motif_databases/ArabidopsisDapv1_cisBP_PBM_101419.meme Motifs.meme
+
+ame --verbose 1 --o gCOR_AME_all_motifs --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 2000.0 --control --shuffle-- --kmer 2 ATLAS_promoter_motif_enrichment/gCOR/gCOR_1kb_promoters.sorted.fasta Motifs.meme &
+
+ame --verbose 1 --o iCOR_AME_all_motifs --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 2000.0 --control --shuffle-- --kmer 2 ATLAS_promoter_motif_enrichment/iCOR/iCOR_1kb_promoters.sorted.fasta Motifs.meme &
+
+ame --verbose 1 --o EN_AME_all_motifs --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 2000.0 --control --shuffle-- --kmer 2 ATLAS_promoter_motif_enrichment/EN/EN_1kb_promoters.sorted.fasta Motifs.meme &
+
+ame --verbose 1 --o EP_AME_all_motifs --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 2000.0 --control --shuffle-- --kmer 2 ATLAS_promoter_motif_enrichment/EP/EP_1kb_promoters.sorted.fasta Motifs.meme &
+
+ame --verbose 1 --o EXO_AME_all_motifs --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 2000.0 --control --shuffle-- --kmer 2 ATLAS_promoter_motif_enrichment/EXO/EXO_1kb_promoters.sorted.fasta Motifs.meme &
+
+ame --verbose 1 --o MCO_AME_all_motifs --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 2000.0 --control --shuffle-- --kmer 2 ATLAS_promoter_motif_enrichment/MCO/MCO_1kb_promoters.sorted.fasta Motifs.meme &
+
+ame --verbose 1 --o MZ_AME_all_motifs --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 2000.0 --control --shuffle-- --kmer 2 ATLAS_promoter_motif_enrichment/MZ/MZ_1kb_promoters.sorted.fasta Motifs.meme &
+
+ame --verbose 1 --o PH_AME_all_motifs --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 2000.0 --control --shuffle-- --kmer 2 ATLAS_promoter_motif_enrichment/PH/PH_1kb_promoters.sorted.fasta Motifs.meme &
+
+ame --verbose 1 --o V_AME_all_motifs --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 2000.0 --control --shuffle-- --kmer 2 ATLAS_promoter_motif_enrichment/V/V_1kb_promoters.sorted.fasta Motifs.meme &
+
+ame --verbose 1 --o WOX_AME_all_motifs --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 2000.0 --control --shuffle-- --kmer 2 ATLAS_promoter_motif_enrichment/WOX/WOX_1kb_promoters.sorted.fasta Motifs.meme &
+
+ame --verbose 1 --o XY_AME_all_motifs --scoring avg --method fisher --hit-lo-fraction 0.25 --evalue-report-threshold 2000.0 --control --shuffle-- --kmer 2 ATLAS_promoter_motif_enrichment/XY/XY_1kb_promoters.sorted.fasta Motifs.meme &
+
+
+```
+
+
+
+```{r motifPromoterFltMegaHeatmap1, eval=FALSE}
+
+# Done on the cluster
+library(tidyverse)
+library(pheatmap)
+library(UpSetR)
+library(matrixStats)
+library(gplots)
+library(RColorBrewer)
+
+#removed gCOR
+cellTypes <- c('iCOR', 'EP', 'EN', 'EXO', 'MCO', 'MZ', 'PH', 'V', 'WOX', 'XY')
+
+for (i in cellTypes){
+	setwd(paste('/share/brady/people/AlexMason/ATLAS/ATLAS_motif_enrichment_megaHeatmap/Promoter_motifs/', i, '_AME_all_motifs', sep=''))
+	my.data = read.delim('ame.tsv', sep='\t')
+	#removed last 3 lines manually
+
+	#names(my.data)
+	# [1] "rank"         "motif_DB"     "motif_ID"     "motif_alt_ID" "consensus"
+	# [6] "p.value"      "adj_p.value"  "E.value"      "tests"        "FASTA_max"
+	#[11] "pos"          "neg"          "PWM_min"      "TP"           "X.TP"
+	#[16] "FP"           "X.FP"
+
+	#create -log10(pval)
+	my.data$neglog10p.val <- -log10(my.data$adj_p.value)
+
+	###check to see how the values distributed
+	pdf('neglog10pvals_102320.pdf', height=11, width=8)
+		hist(my.data$neglog10p.val)
+	dev.off()
+
+	#now get the unique motif_alt_ID with the more significant p-vals
+	uniqueMotif.data <- my.data %>%
+			arrange(motif_alt_ID, desc(neglog10p.val)) %>%
+			group_by(motif_alt_ID) %>%
+			slice(1) %>%
+			ungroup()
+
+	#now export that data to file
+
+	write.table(uniqueMotif.data, paste(i, "_AME_unique.tsv", sep=''), quote = FALSE, sep = "\t", na = "NA", row.names = FALSE)
+}
+
+# check manually to make sure the files are all the same length (they are)
+
+```
+
+```{r motifPromoterFltMegaHeatmap2, engine='bash', eval=FALSE}
+cd /share/brady/people/AlexMason/ATLAS/ATLAS_motif_enrichment_megaHeatmap/Promoter_motifs
+
+sort -u -k 4 gCOR_AME_all_motifs/gCOR_AME_unique.tsv > gCOR_AME_all_motifs/gCOR_AME_unique.sorted.tsv
+sort -u -k 4 iCOR_AME_all_motifs/iCOR_AME_unique.tsv > iCOR_AME_all_motifs/iCOR_AME_unique.sorted.tsv
+sort -u -k 4 EP_AME_all_motifs/EP_AME_unique.tsv > EP_AME_all_motifs/EP_AME_unique.sorted.tsv
+sort -u -k 4 EN_AME_all_motifs/EN_AME_unique.tsv > EN_AME_all_motifs/EN_AME_unique.sorted.tsv
+sort -u -k 4 EXO_AME_all_motifs/EXO_AME_unique.tsv > EXO_AME_all_motifs/EXO_AME_unique.sorted.tsv
+sort -u -k 4 MCO_AME_all_motifs/MCO_AME_unique.tsv > MCO_AME_all_motifs/MCO_AME_unique.sorted.tsv
+sort -u -k 4 MZ_AME_all_motifs/MZ_AME_unique.tsv > MZ_AME_all_motifs/MZ_AME_unique.sorted.tsv
+sort -u -k 4 PH_AME_all_motifs/PH_AME_unique.tsv > PH_AME_all_motifs/PH_AME_unique.sorted.tsv
+sort -u -k 4 V_AME_all_motifs/V_AME_unique.tsv > V_AME_all_motifs/V_AME_unique.sorted.tsv
+sort -u -k 4 WOX_AME_all_motifs/WOX_AME_unique.tsv > WOX_AME_all_motifs/WOX_AME_unique.sorted.tsv
+sort -u -k 4 XY_AME_all_motifs/XY_AME_unique.tsv > XY_AME_all_motifs/XY_AME_unique.sorted.tsv
+
+#Now add identifier column then combine and sort (may have to parts manually)
+
+cd /share/brady/people/AlexMason/ATLAS/ATLAS_motif_enrichment_megaHeatmap/Promoter_motifs/AME_output_parsed
+
+#for idx in `ls *.tsv`; do cut -f1-18 $idx | awk -vidx=$idx '{ print $0"\t"idx; }' > $idx.id.tsv; done
+
+
+# make matrix file
+#removed <(awk -v OFS='\t' '{print $6}' gCOR_AME_unique.sorted.tsv.id.tsv)
+paste <(awk -v OFS='\t' '{print $3, $4, $6}' EN_AME_unique.sorted.tsv.id.tsv ) <(awk -v OFS='\t' '{print $6}' EP_AME_unique.sorted.tsv.id.tsv ) <(awk -v OFS='\t' '{print $6}' EXO_AME_unique.sorted.tsv.id.tsv) <(awk -v OFS='\t' '{print $6}' iCOR_AME_unique.sorted.tsv.id.tsv) <(awk -v OFS='\t' '{print $6}' MCO_AME_unique.sorted.tsv.id.tsv) <(awk -v OFS='\t' '{print $6}' MZ_AME_unique.sorted.tsv.id.tsv) <(awk -v OFS='\t' '{print $6}' PH_AME_unique.sorted.tsv.id.tsv) <(awk -v OFS='\t' '{print $6}' V_AME_unique.sorted.tsv.id.tsv) <(awk -v OFS='\t' '{print $6}' WOX_AME_unique.sorted.tsv.id.tsv) <(awk -v OFS='\t' '{print $6}' XY_AME_unique.sorted.tsv.id.tsv) > ATLAS_promoter_motifs_ALL_matrix_pavls.tsv
+
+# now do some manual editing in excel for the column headers
+# I also put a copy in cd /share/brady/people/AlexMason/ATLAS/ATLAS_motif_enrichment_megaHeatmap/Promoter_motifs
+
+
+```
+
+So, because they'are so many TFs, I've decided to break this up into four groups of TF families.
+
+Group Pub: TFs used for the main figure in the paper
+Group 1: Favorites and large TF families
+Group 2: not so large TF families that are also favorites
+Group 3: TF families with only one member listed
+
+```{r motifPromoterFltMegaHeatmap3, eval=TRUE}
+
+#setwd('/share/brady/people/AlexMason/ATLAS/ATLAS_motif_enrichment_megaHeatmap/Promoter_motifs')
+setwd('E:/BRADY_LAB/ATLAS/ATLAS_motif_enrichment_megaHeatmap/Promoter_motifs')
+# data wrangling
+library(matrixStats)
+library(tidyverse)
+
+# plot making
+library(pheatmap)
+library(UpSetR)
+library(gplots)
+library(ggpubr)
+
+# all of the color options
+library(RColorBrewer)
+library(viridis)
+library(LaCroixColoR)
+library(randomcoloR)
+
+# A quick bar plot to show members each familes has
+TFfamilies <- read.delim("E:/BRADY_LAB/Custom_motif_databases/gene_names_family.tsv", sep='\t')
+TFfamiliesUnique <- TFfamilies[!duplicated(TFfamilies$altID), ]
+# filter duplicate altIDs
+
+table(TFfamiliesUnique$TF.family)
+TFfamilyNr <- data.frame(table(TFfamiliesUnique$TF.family))
+names(TFfamilyNr) <- c("TF.family", "Nr.members")
+
+# Now make a quick plot
+myPalette <- lacroix_palette("PeachPear", n=57, type="continuous")
+#pdf("E:/BRADY_LAB/ATLAS/ATLAS_motif_enrichment_megaHeatmap/Promoter_motifs/TFfamily_Nr.memebrs_021420.pdf", height=8, width=11)
+ggbarplot(TFfamilyNr, x = "TF.family", y = "Nr.members",
+          fill = "darkgrey",               
+          color = "darkgrey",            # Set bar border colors to white
+          label = TRUE,            # Display labels
+         #palette = myPalette,            # ste color palette here
+          sort.val = "desc",          # Sort the value in dscending order
+          sort.by.groups = FALSE,     # Don't sort inside each group
+          x.text.angle = 90          # Rotate vertically x axis texts
+          )
+#dev.off()
+
+
+
+# read in motif table data as a matrix
+my.data <- read.table('ATLAS_promoter_motifs_ALL_matrix_pavls_altID.tsv', sep='\t', header=TRUE, row.names=1)
+
+# I don't know why, but R is reading this all characters not numbers
+my.data[,1] = as.numeric(as.character(my.data[,1]))
+my.data[,2] = as.numeric(as.character(my.data[,2]))
+my.data[,3] = as.numeric(as.character(my.data[,3]))
+my.data[,4] = as.numeric(as.character(my.data[,4]))
+my.data[,5] = as.numeric(as.character(my.data[,5]))
+my.data[,6] = as.numeric(as.character(my.data[,6]))
+my.data[,7] = as.numeric(as.character(my.data[,7]))
+my.data[,8] = as.numeric(as.character(my.data[,8]))
+my.data[,9] = as.numeric(as.character(my.data[,9]))
+my.data[,10] = as.numeric(as.character(my.data[,10]))
+#my.data[,11] = as.numeric(as.character(my.data[,11]))
+
+
+
+# assign gene names and cell types
+cellTypes <- colnames(my.data)
+tfMotifs <- rownames(my.data)
+
+#pdf("ATLAS_promoter_motifs_ALL_hist_negLog10pvals_021420.pdf", height=8, width=11)
+par(mfrow=c(2,5))
+hist(my.data[,1])
+hist(my.data[,2])
+hist(my.data[,3])
+hist(my.data[,4])
+hist(my.data[,5])
+hist(my.data[,6])
+hist(my.data[,7])
+hist(my.data[,8])
+hist(my.data[,9])
+hist(my.data[,10])
+#hist(my.data[,11])
+#dev.off()
+
+norow.data <- read.table('ATLAS_promoter_motifs_ALL_matrix_pavls_altID.tsv', sep='\t', header=TRUE)
+#norowB.data <- read.table('ATLAS_promoter_motifs_ALL_matrix_pavls_altID.tsv', sep='\t', header=TRUE)
+#adjustpvals with fdr and change to numeric
+norow.data[,2] = p.adjust(as.numeric(as.character(norow.data[,2])), method='fdr')
+norow.data[,3] = p.adjust(as.numeric(as.character(norow.data[,3])), method='fdr')
+norow.data[,4] = p.adjust(as.numeric(as.character(norow.data[,4])), method='fdr')
+norow.data[,5] = p.adjust(as.numeric(as.character(norow.data[,5])), method='fdr')
+norow.data[,6] = p.adjust(as.numeric(as.character(norow.data[,6])), method='fdr')
+norow.data[,7] = p.adjust(as.numeric(as.character(norow.data[,7])), method='fdr')
+norow.data[,8] = p.adjust(as.numeric(as.character(norow.data[,8])), method='fdr')
+norow.data[,9] = p.adjust(as.numeric(as.character(norow.data[,9])), method='fdr')
+norow.data[,10] = p.adjust(as.numeric(as.character(norow.data[,10])), method='fdr')
+norow.data[,11] = p.adjust(as.numeric(as.character(norow.data[,11])), method='fdr')
+
+write.table(norow.data, "ATLAS_promoter_motifs_ALL_matrix_padj_altID.tsv", quote = FALSE, sep = "\t", na = "NA", row.names = FALSE)
+
+my.merge <- merge(norow.data, TFfamilies, by="altID")
+# remove duplicates (again)
+my.merge <-my.merge[!duplicated(my.merge$altID), ]
+
+# now filter out any TFs that were not signifcant in at least 1 cell type group
+
+# filter for TFs that are significant in at least one cell type
+
+mat <- data.matrix(my.merge[,2:11])
+
+mat2 <- -log(mat[,1:10], 10)
+my.merge$maxi <- rowMaxs(mat2)
+
+#filter against the expressolog data
+# read in expressolog data 
+expressologs <- read.delim("E:/BRADY_LAB/Custom_motif_databases/DAPseq_cisBP_PBM_LSMexpressologs_positiveVals_121619.tsv", sep="\t")
+head(expressologs)
+expressolog.altID <- as.data.frame(expressologs[,3])
+names(expressolog.altID) <- "altID"
+#merge again
+my.merge.Ex <- merge(my.merge, expressolog.altID, by.x="altID", by.y="altID")
+
+# just to check on the dist. of scores
+par(mfrow=c(2,1))
+hist(my.merge$maxi, breaks=50, col="darkgrey", border="white")
+abline(v=1.3, col="red")
+hist(my.merge.Ex$maxi, breaks=50, col="darkgrey", border="white")
+abline(v=1.3, col="red")
+
+# filter for motifs that significant in at least one cell type
+my.merge2 <- my.merge[my.merge$maxi >= 1.3, ] # I think I'll use this for now # I think I'll use this for now
+dim(my.merge2)
+table(my.merge2$TF.family)
+
+###didn't use, so fix figure legend!###
+my.merge.Ex2 <- my.merge.Ex[my.merge.Ex$maxi >= 1.3, ] 
+dim(my.merge.Ex2)
+table(my.merge.Ex2$TF.family)
+
+
+## make some plots of the family members
+TFfamilyNr <- data.frame(table(my.merge2$TF.family))
+names(TFfamilyNr) <- c("TF.family", "Nr.members")
+
+TFfamilyNrEx <- data.frame(table(my.merge.Ex2$TF.family))
+names(TFfamilyNrEx) <- c("TF.family", "Nr.members")
+TFfamilyNrMerge <- merge(TFfamilyNr, TFfamilyNrEx, by="TF.family")
+
+write.table(TFfamilyNrMerge, "TFfamilyNrMerge.csv", quote = FALSE, sep = ",", na = "NA", row.names = FALSE)
+# Now make a quick plot
+#pdf("E:/BRADY_LAB/ATLAS/ATLAS_motif_enrichment_megaHeatmap/Promoter_motifs/TFfamily_Nr.members_found_102320.pdf", height=8, width=11)
+ggbarplot(TFfamilyNr, x = "TF.family", y = "Nr.members",
+          fill = "darkgrey",               
+          color = "darkgrey",            # Set bar border colors to white
+          label = TRUE,            # Display labels
+          palette = "darkgrey",            # ste color palette here
+          sort.val = "desc",          # Sort the value in dscending order
+          sort.by.groups = FALSE,     # Don't sort inside each group
+          x.text.angle = 90          # Rotate vertically x axis texts
+          )
+#dev.off()
+
+
+#pdf("E:/BRADY_LAB/ATLAS/ATLAS_motif_enrichment_megaHeatmap/Promoter_motifs/TFfamily_Nr.members_Expressologs_found_102320.pdf", height=8, width=11)
+ggbarplot(TFfamilyNrEx, x = "TF.family", y = "Nr.members",
+          fill = "darkgrey",               
+          color = "darkgrey",            # Set bar border colors to white
+          label = TRUE,            # Display labels
+          palette = "darkgrey",            # ste color palette here
+          sort.val = "desc",          # Sort the value in dscending order
+          sort.by.groups = FALSE,     # Don't sort inside each group
+          x.text.angle = 90          # Rotate vertically x axis texts
+          )
+#dev.off()
+
+## make booleans for subsetting by TF family (for orginal group for now)
+
+# 8
+group1 <- my.merge2$TF.family == "AP2EREBP" | my.merge2$TF.family == "MYBrelated" | my.merge2$TF.family == "Homeobox" | my.merge2$TF.family == "MADS" |  my.merge2$TF.family == "HSF" | my.merge2$TF.family == "ABI3VP1" | my.merge2$TF.family == "BEH" | my.merge2$TF.family == "TCP"
+# 9
+group2 <-  my.merge2$TF.family == "C2C2gata" | my.merge2$TF.family == "C3H" | my.merge2$TF.family == "LOBAS2" | my.merge2$TF.family == "Trihelix"  | my.merge2$TF.family == "CPP"  | my.merge2$TF.family == "ND" | my.merge2$TF.family == "ZFHD" | my.merge2$TF.family == "CAMTA" | my.merge2$TF.family == "HB"  
+
+# 10
+group3 <- my.merge2$TF.family == "Orphan" | my.merge2$TF.family == "SBP" | my.merge2$TF.family == "ARID" | my.merge2$TF.family == "BBRBPC" | my.merge2$TF.family == "C2C2YABBY" | my.merge2$TF.family == "ARF" | my.merge2$TF.family == "C2C2COlike" | my.merge2$TF.family == "G2like" | my.merge2$TF.family == "RWPRK" | my.merge2$TF.family == "TFB3" 
+
+# 18
+group4 <- my.merge2$TF.family == "AThooklike" | my.merge2$TF.family == "BSD" | my.merge2$TF.family == "DBP" | my.merge2$TF.family == "E2FDP" | my.merge2$TF.family == "EIL" |  my.merge2$TF.family == "FAR1" | my.merge2$TF.family == "GeBP" | my.merge2$TF.family == "HMG" | my.merge2$TF.family == "LIM" | my.merge2$TF.family == "mTERF" | my.merge2$TF.family == "PLATZ" | my.merge2$TF.family == "PPdT" | my.merge2$TF.family == "RAV" | my.merge2$TF.family == "REM" | my.merge2$TF.family == "REMB3" | my.merge2$TF.family == "S1Falike" | my.merge2$TF.family == "WRC" | my.merge2$TF.family == "zfGRF"
+
+
+# 6
+groupPub <- my.merge2$TF.family == "NAC" | my.merge2$TF.family == "WRKY" | my.merge2$TF.family == "MYB" | my.merge2$TF.family == "bZIP" | my.merge2$TF.family == "bHLH" | my.merge2$TF.family == "C2C2dof"
+
+#now filter and make the proper matrices
+
+
+
+
+
+## Create a data frame with the mapping of colors
+# Column info, removed gCOR
+CT <- c("#44C3D0", "#016E82", "#7D2C91", "#2E5EAC", "#CD85B9", "#AA1D3F", "#ABD379", "#19B35A", "#F47752", "#EDE83B")
+names(CT) <- as.character(cellTypes)  ## Assign a color to each cell type
+annotColumns <- data.frame("CT"=as.character(cellTypes), row.names = cellTypes)
+
+
+# Row info (have do this for each heat map)
+TFfamiliesAnno <- read.delim('E:/BRADY_LAB/Custom_motif_databases/gene_names_family.tsv', sep='\t')
+
+#######################
+### Group1 Heat map ###
+#######################
+## Group 1
+group1Data <- my.merge2[group1, ]
+#assign labels in column 1 to "rnames"
+rnames <- group1Data[,1]
+#transform column 2-11 into a matrix
+mat.group1 <- data.matrix(group1Data[,2:11])
+#assign row names
+rownames(mat.group1) <- rnames
+# -log10(padj)
+mat.group1 <- -log(mat.group1, 10)
+#reassign non-significant values as NA
+mat.group1[mat.group1 < 1.3] <- NA
+#reassign values greater than 30 as 30
+mat.group1[mat.group1 >= 40] <- 40
+
+
+
+TFfamAnnotationMat <-tibble("altID"=rownames(mat.group1)) %>% left_join(TFfamiliesAnno[!duplicated(TFfamiliesAnno$altID),],by="altID")
+head(TFfamAnnotationMat)
+TF.family <- as.character(unique(TFfamAnnotationMat$TF.family))
+#
+TFpalette <- brewer.pal(8, "Set3")
+names(TFpalette) <- TF.family
+head(TFpalette)
+#
+annotRows <- data.frame("TFfam"=as.character(TFfamAnnotationMat$TF.family), row.names = TFfamAnnotationMat$altID)
+#
+colorHeatmapMapping <- list("CT"=CT, "TFfam"=TFpalette) #Add to a list
+
+#pdf("ALL_signif_1kb_promoter_motifs_neglog10pval_121019.pdf", height=32, width=8)
+wh <-  20
+pheatmap(mat.group1, 
+         color = brewer.pal(9, "YlGnBu"),
+         border_color = NA, 
+         annotation_colors = colorHeatmapMapping,
+         annotation_col = annotColumns,
+         annotation_row = annotRows,
+         show_rownames = F, show_colnames = T,
+         scale = "none", 
+         cellwidth = wh,
+         cellheight = wh/16,
+         width = 8,
+         height =11,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         na_col = "darkgrey"
+         #,filename = "Group1_signif_1kb_promoter_motifs_neglog10pval_NAasgrey_121119.pdf"
+         ) 
+
+wh <-  20
+pheatmap(mat.group1[order(annotRows$TFfam),],
+         color = brewer.pal(9, "YlGnBu"), 
+         scale = "none",
+         border_color = NA, 
+         annotation_colors = colorHeatmapMapping,
+         annotation_col = annotColumns,
+         annotation_row = annotRows,
+         show_rownames = F,
+         show_colnames = T,
+         gaps_row = cumsum(table(sort(annotRows$TFfam))),
+         cellwidth = wh,
+         cellheight = wh/2,
+         cluster_rows = F,
+         cluster_cols = T,
+         na_col = "darkgrey"
+         ,filename = "Group1_signif_1kb_promoter_motifs_neglog10pval_TFsClustered_102320.pdf"
+         )
+
+#######################
+### Group2 Heat map ###
+#######################
+## Group 2
+group2Data <- my.merge2[group2, ]
+#assign labels in column 1 to "rnames"
+rnames <- group2Data[,1]
+#transform column 2-11 into a matrix
+mat.group2 <- data.matrix(group2Data[,2:11])
+#assign row names
+rownames(mat.group2) <- rnames
+# -log10(padj)
+mat.group2 <- -log(mat.group2, 10)
+#reassign non-significant values as NA
+mat.group2[mat.group2 < 1.3] <- NA
+#reassign values greater than 30 as 30
+mat.group2[mat.group2 >= 40] <- 40
+
+TFfamAnnotationMat <-tibble("altID"=rownames(mat.group2)) %>% left_join(TFfamiliesAnno[!duplicated(TFfamiliesAnno$altID),],by="altID")
+head(TFfamAnnotationMat)
+TF.family <- as.character(unique(TFfamAnnotationMat$TF.family))
+#
+TFpalette <- brewer.pal(9, "Set3")
+names(TFpalette) <- TF.family
+head(TFpalette)
+#
+annotRows <- data.frame("TFfam"=as.character(TFfamAnnotationMat$TF.family), row.names = TFfamAnnotationMat$altID)
+#
+colorHeatmapMapping <- list("CT"=CT, "TFfam"=TFpalette) #Add to a list
+
+
+wh <-  20
+pheatmap(mat.group2, 
+         color = brewer.pal(9, "YlGnBu"),
+         border_color = NA, 
+         annotation_colors = colorHeatmapMapping,
+         annotation_col = annotColumns,
+         annotation_row = annotRows,
+         show_rownames = T,
+         show_colnames = T,
+         scale = "none", 
+         cellwidth = wh,
+         cellheight = wh/2,
+         width = 8,
+         height =16,
+         cluster_rows = F,
+         cluster_cols = T,
+         na_col = "darkgrey"
+         #,filename = "Group2_signif_1kb_promoter_motifs_neglog10pval_NAasgrey_121119.pdf"
+         ) 
+
+wh <-  20
+pheatmap(mat.group2[order(annotRows$TFfam),],
+         color = brewer.pal(9, "YlGnBu"), 
+         scale = "none",
+         border_color = NA, 
+         annotation_colors = colorHeatmapMapping,
+         annotation_col = annotColumns,
+         annotation_row = annotRows,
+         show_rownames = F,
+         show_colnames = T,
+         gaps_row = cumsum(table(sort(annotRows$TFfam))),
+         cellwidth = wh, 
+         cellheight = wh/2,
+         width = 8,
+         height =16,
+         cluster_rows = F,
+         cluster_cols = T,
+         na_col = "darkgrey"
+         ,filename = "Group2_signif_1kb_promoter_motifs_neglog10pval_TFsClustered_102320.pdf"
+         )
+
+#######################
+### Group3 Heat map ###
+#######################
+## Group 3
+group3Data <- my.merge2[group3, ]
+#assign labels in column 1 to "rnames"
+rnames <- group3Data[,1]
+#transform column 2-11 into a matrix
+mat.group3 <- data.matrix(group3Data[,2:11])
+#assign row names
+rownames(mat.group3) <- rnames
+# -log10(padj)
+mat.group3 <- -log(mat.group3, 10)
+#reassign non-significant values as NA
+mat.group3[mat.group3 < 1.3] <- NA
+#reassign values greater than 30 as 30
+mat.group3[mat.group3 >= 40] <- 40
+
+TFfamAnnotationMat <-tibble("altID"=rownames(mat.group3)) %>% left_join(TFfamiliesAnno[!duplicated(TFfamiliesAnno$altID),],by="altID")
+head(TFfamAnnotationMat)
+TF.family <- as.character(unique(TFfamAnnotationMat$TF.family))
+#
+TFpalette <- brewer.pal(10, "Set3")
+names(TFpalette) <- TF.family
+head(TFpalette)
+#
+annotRows <- data.frame("TFfam"=as.character(TFfamAnnotationMat$TF.family), row.names = TFfamAnnotationMat$altID)
+#
+colorHeatmapMapping <- list("CT"=CT, "TFfam"=TFpalette) #Add to a list
+
+
+wh <-  20
+pheatmap(mat.group3, 
+         color = brewer.pal(9, "YlGnBu"),
+         border_color = NA, 
+         annotation_colors = colorHeatmapMapping,
+         annotation_col = annotColumns,
+         annotation_row = annotRows,
+         show_rownames = T,
+         show_colnames = T,
+         scale = "none", 
+         cellwidth = wh,
+         cellheight = wh/2,
+         width = 8,
+         height =11,
+         cluster_rows = F,
+         cluster_cols = T,
+         na_col = "darkgrey"
+         #,filename = "Group3_signif_1kb_promoter_motifs_neglog10pval_NAasgrey_121119.pdf"
+         ) 
+
+wh <-  20
+pheatmap(mat.group3[order(annotRows$TFfam),],
+         color = brewer.pal(9, "YlGnBu"), 
+         scale = "none",
+         border_color = NA, 
+         annotation_colors = colorHeatmapMapping,
+         annotation_col = annotColumns,
+         annotation_row = annotRows,
+         show_rownames = F,
+         show_colnames = T,
+         gaps_row = cumsum(table(sort(annotRows$TFfam))),
+         cellwidth = wh, 
+         cellheight = wh/2,
+         width = 8,
+         height =11,
+         cluster_rows = F,
+         cluster_cols = T,
+         na_col = "darkgrey"
+         ,filename = "Group3_signif_1kb_promoter_motifs_neglog10pval_TFsClustered_102320.pdf"
+         )
+
+#######################
+### Group4 Heat map ###
+#######################
+## Group 4
+group4Data <- my.merge2[group4, ]
+#assign labels in column 1 to "rnames"
+rnames <- group4Data[,1]
+#transform column 2-11 into a matrix
+mat.group4 <- data.matrix(group4Data[,2:11])
+#assign row names
+rownames(mat.group4) <- rnames
+# -log10(padj)
+mat.group4 <- -log(mat.group4, 10)
+#reassign non-significant values as NA
+mat.group4[mat.group4 < 1.3] <- NA
+#reassign values greater than 30 as 30
+mat.group4[mat.group4 >= 40] <- 40
+
+TFfamAnnotationMat <-tibble("altID"=rownames(mat.group4)) %>% left_join(TFfamiliesAnno[!duplicated(TFfamiliesAnno$altID),],by="altID")
+head(TFfamAnnotationMat)
+TF.family <- as.character(unique(TFfamAnnotationMat$TF.family))
+#
+set.seed(42)
+n <- 18
+TFpalette <- randomColor(n)
+names(TFpalette) <- TF.family
+head(TFpalette)
+#
+annotRows <- data.frame("TFfam"=as.character(TFfamAnnotationMat$TF.family), row.names = TFfamAnnotationMat$altID)
+#
+colorHeatmapMapping <- list("CT"=CT, "TFfam"=TFpalette) #Add to a list
+
+
+wh <-  20
+pheatmap(mat.group4, 
+         color = brewer.pal(9, "YlGnBu"), 
+         scale = "none",
+         border_color = NA, 
+         annotation_colors = colorHeatmapMapping,
+         annotation_col = annotColumns,
+         annotation_row = annotRows,
+         show_rownames = F,
+         show_colnames = T,
+         gaps_row = cumsum(table(sort(annotRows$TFfam))),
+         cellwidth = wh, 
+         cellheight = wh/2,
+         width = 8,
+         height =11,
+         cluster_rows = F,
+         cluster_cols = T,
+         na_col = "darkgrey"
+         ,filename = "Group4_signif_1kb_promoter_motifs_neglog10pval_NAasgrey_102320.pdf"
+         ) 
+
+
+#######################
+### GroupPub Heat map #
+#######################
+## Group Pub
+groupPubData <- my.merge2[groupPub, ]
+#assign labels in column 1 to "rnames"
+rnames <- groupPubData[,1]
+#transform column 2-11 into a matrixge
+mat.groupPub <- data.matrix(groupPubData[,2:11])
+#assign row names
+rownames(mat.groupPub) <- rnames
+# -log10(padj)
+mat.groupPub <- -log(mat.groupPub, 10)
+#reassign non-significant values as NA
+mat.groupPub[mat.groupPub < 1.3] <- NA
+#reassign values greater than 30 as 30
+mat.groupPub[mat.groupPub >= 40] <- 40
+## Let's move to plotting these matrices as heatmaps
+
+TFfamAnnotationMat <-tibble("altID"=rownames(mat.groupPub)) %>% left_join(TFfamiliesAnno[!duplicated(TFfamiliesAnno$altID),],by="altID")
+head(TFfamAnnotationMat)
+TF.family <- as.character(unique(TFfamAnnotationMat$TF.family))
+#
+TFpalette <- brewer.pal(6, "Set3")
+names(TFpalette) <- TF.family
+head(TFpalette)
+#
+annotRows <- data.frame("TFfam"=as.character(TFfamAnnotationMat$TF.family), row.names = TFfamAnnotationMat$altID)
+#
+colorHeatmapMapping <- list("CT"=CT, "TFfam"=TFpalette) #Add to a list
+
+#pdf("ALL_signif_1kb_promoter_motifs_neglog10pval_121019.pdf", height=32, width=8)
+
+
+wh <-  24
+pheatmap(mat.groupPub, 
+         color = brewer.pal(9, "YlGnBu"),
+         border_color = NA, 
+         annotation_colors = colorHeatmapMapping,
+         annotation_col = annotColumns,
+         annotation_row = annotRows,
+         show_rownames = F, show_colnames = T,
+         scale = "none", 
+         cellwidth = wh,
+         cellheight = wh/16,
+         width = 8,
+         height =11,
+         cluster_rows = FALSE,
+         cluster_cols = TRUE,
+         na_col = "darkgrey"
+         #,filename = "GroupPub_signif_1kb_promoter_motifs_neglog10pval_NAasgrey_021020.pdf"
+         ) 
+
+wh <-  24
+pheatmap(mat.groupPub[order(annotRows$TFfam),],
+         color = brewer.pal(9, "YlGnBu"), 
+         scale = "none",
+         border_color = NA, 
+         annotation_colors = colorHeatmapMapping,
+         annotation_col = annotColumns,
+         annotation_row = annotRows,
+         show_rownames = F, show_colnames = T,
+         gaps_row = cumsum(table(sort(annotRows$TFfam))),
+         cellwidth = wh, 
+         cellheight = wh/16,
+         cluster_rows = F,
+         cluster_cols = T,
+         na_col = "darkgrey"
+        ,filename = "GroupPub_signif_1kb_promoter_motifs_neglog10pval_TFsClustered_102320.pdf"
+         )
+
+```
+
+```{r uniqueMotifs, engine='bash', eval=FALSE}
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
