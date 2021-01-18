@@ -25,6 +25,8 @@ These detailed bench protocols describe the methods as carried out in the Tomato
 - [INTACT isolation of nuclei](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Protocols/INTACT%20Atlas.pdf)
 - [ATAC-seq library preparation from INTACT](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Protocols/ATAC-seq%20library%20prep%20Atlas.pdf)
 
+## Supplementary data
+- [Pairwise comparison of ATAC cut-counts between cell types](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Figures/Figure_S23_scatter_plot_replicates_repUnion_THSs_ALL_110520_v2_with_legend.pdf)
 
 ## Other resources by topic (*in progress*)
 - [Data on GEO]
