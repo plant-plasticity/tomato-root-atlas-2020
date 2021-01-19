@@ -18,6 +18,7 @@ Code and resources for Tomato Root Atlas
 - [Co-expression network analysis: WGCNA ](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Scripts/WGCNA-Tomato-ATLAS.rmd)
 - [ATAC-aseq analysis](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/ATAC)
 - [Motif enrichment](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Motif_enrichment)
+- [Ontology_enrichment](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Ontology_enrichment)
 
 ## Protocols
 These detailed bench protocols describe the methods as carried out in the Tomato Root Atlas paper.
