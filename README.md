@@ -19,6 +19,7 @@ Code and resources for Tomato Root Atlas
 - [ATAC-aseq analysis](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/ATAC)
 - [Motif enrichment](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Motif_enrichment)
 - [Ontology_enrichment](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Ontology_enrichment)
+- [Orthology_maps](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Orthology_maps)
 
 ## Protocols
 These detailed bench protocols describe the methods as carried out in the Tomato Root Atlas paper.
