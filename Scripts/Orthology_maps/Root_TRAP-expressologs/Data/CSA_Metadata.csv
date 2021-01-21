@@ -1,0 +1,16 @@
+Name,Tissue,Species,Platform
+Sl_MCO,MCO,Sly,RNAseq
+Sl_EN,EN,Sly,RNAseq
+Sl_V,V,Sly,RNAseq
+Sl_MZ,MZ,Sly,RNAseq
+Sl_X35S,X35S,Sly,RNAseq
+At_MCO,MCO,Ath,microarray
+At_EN,EN,Ath,microarray
+At_V,V,Ath,microarray
+At_MZ,MZ,Ath,microarray
+At_X35S,X35S,Ath,microarray
+Os_MCO,MCO,Osa,RNAseq
+Os_EN,EN,Osa,RNAseq
+Os_V,V,Osa,RNAseq
+Os_MZ,MZ,Osa,RNAseq
+Os_X35S,X35S,Osa,RNAseq
