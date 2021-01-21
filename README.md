@@ -53,4 +53,5 @@ These detailed bench protocols describe the methods as carried out in the Tomato
 
    <img src="https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Figures/Figure_S26_NetworkFlowchart.jpg" width="700">
 
-- ** Flowchart for multi-species analysis.** An overview of the pipeline and methods used for exploring the conservation of homologous cell types and tissues among tomato, Arabidopsis, and rice.  <img src="https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Figures/Multi-species analysis overview.pdf"
+- ** Pipeline of multi-species analysis.** An overview of the pipeline and methods used for exploring the conservation of homologous cell types and tissues among tomato, Arabidopsis, and rice.  
+  <img src="https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Figures/Multi-species analysis overview.pdf">
