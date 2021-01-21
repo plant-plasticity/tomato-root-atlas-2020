@@ -18,8 +18,10 @@ Code and resources for Tomato Root Atlas
 - [Co-expression network analysis: WGCNA ](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Scripts/WGCNA-Tomato-ATLAS.rmd)
 - [ATAC-aseq analysis](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/ATAC)
 - [Motif enrichment](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Motif_enrichment)
-- [Ontology_enrichment](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Ontology_enrichment)
-- [Orthology_maps](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Orthology_maps)
+- [Ontology enrichment](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Ontology_enrichment)
+- [Orthology maps](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Orthology_maps)
+- [Detecting constitutively expressed genes](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/ConstitExpr_homologCT.R)
+- [Differential expression: limma-voom](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/limmaVoom_DEgenes.R)
 
 ## Protocols
 These detailed bench protocols describe the methods as carried out in the Tomato Root Atlas paper.
@@ -51,3 +53,4 @@ These detailed bench protocols describe the methods as carried out in the Tomato
 
    <img src="https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Figures/Figure_S26_NetworkFlowchart.jpg" width="700">
 
+- ** Flowchart for multi-species analysis.** An overview of the pipeline and methods used for exploring the conservation of homologous cell types and tissues among tomato, Arabidopsis, and rice.  <img src="https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Figures/Multi-species analysis overview.pdf"
