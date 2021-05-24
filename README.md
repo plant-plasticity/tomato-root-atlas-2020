@@ -5,11 +5,9 @@ Code and resources for Tomato Root Atlas
 
 **Authors:**  Kaisa Kajala, Mona Gouran, Lidor Shaar-Moshe, G. Alex Mason, Joel Rodriguez-Medina, Dorota Kawa, Germain Pauluzzi, Mauricio Reynoso, Alex Canto-Pastor, Concepcion Manzano, Vincent Lau, Mariana A. S. Artur, Donnelly A. West, Sharon B. Gray, Alexander T. Borowsky, Bryshal P. Moore, Andrew I. Yao, Kevin W. Morimoto, Marko Bajic, Elide Formentin, Niba Nirmal, Alan Rodriguez, Asher Pasha, Roger B. Deal, Daniel Kliebenstein, Torgeir R. Hvidsten, Nicholas J. Provart, Neelima Sinha, Daniel E. Runcie, Julia Bailey-Serres, Siobhan M. Brady
 
-**Journal:** TBC
+**Journal:** [Cell](https://authors.elsevier.com/sd/article/S0092-8674(21)00504-3)
 
-**Abstract:** 
-
-> TBC
+**Abstract:** Plant species have evolved myriads of solutions, including complex cell type development and regulation, to adapt to dynamic environments. To understand this cellular diversity, we profiled tomato root cell type translatomes. Using xylem differentiation in tomato, examples of functional innovation, repurposing, and conservation of transcription factors are described, relative to the model plant Arabidopsis. Repurposing and innovation of genes are further observed within an exodermis regulatory network and illustrate its function. Comparative translatome analyses of rice, tomato, and Arabidopsis cell populations suggest increased expression conservation of root meristems compared with other homologous populations. In addition, the functions of constitutively expressed genes are more conserved than those of cell type/tissue-enriched genes. These observations suggest that higher order properties of cell type and pan-cell type regulation are evolutionarily conserved between plants and animals.
 
 
 ## Code used by topic (*in progress*)
@@ -33,9 +31,9 @@ These detailed bench protocols describe the methods as carried out in the Tomato
 ## Supplementary data
 - [Pairwise comparison of ATAC cut-counts between cell types](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Figures/Figure_S23_scatter_plot_replicates_repUnion_THSs_ALL_110520_v2_with_legend.pdf)
 
-## Other resources by topic (*in progress*)
-- [Data on GEO]
-- [eFP browser]
+## Other resources by topic
+- [Data on GEO](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE149217)
+- [eFP browser](http://bar.utoronto.ca/eplant_tomato/) Click on the “Tissue and Experiment eFP Viewers.”
 
 
 ## Analysis pipeline summaries
