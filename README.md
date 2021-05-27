@@ -11,8 +11,9 @@ Code and resources for Tomato Root Atlas
 > Plant species have evolved myriads of solutions, including complex cell type development and regulation, to adapt to dynamic environments. To understand this cellular diversity, we profiled tomato root cell type translatomes. Using xylem differentiation in tomato, examples of functional innovation, repurposing, and conservation of transcription factors are described, relative to the model plant Arabidopsis. Repurposing and innovation of genes are further observed within an exodermis regulatory network and illustrate its function. Comparative translatome analyses of rice, tomato, and Arabidopsis cell populations suggest increased expression conservation of root meristems compared with other homologous populations. In addition, the functions of constitutively expressed genes are more conserved than those of cell type/tissue-enriched genes. These observations suggest that higher order properties of cell type and pan-cell type regulation are evolutionarily conserved between plants and animals.
 
 
-## Code used by topic (*in progress*)
+## Code used by topic 
 - [Obtaining RNA-seq read counts: Trimming, Kallisto and STAR](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Scripts/Trimming_Kallist_STAR_mapping.sh)
+- [Differential expression: limma-voom](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Limma-voom)
 - [Relative differential expression: Roku](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Roku)
 - [Co-expression network analysis: WGCNA ](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Scripts/WGCNA-Tomato-ATLAS.rmd)
 - [ATAC-aseq analysis](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/ATAC)
@@ -20,7 +21,7 @@ Code and resources for Tomato Root Atlas
 - [Ontology enrichment](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Ontology_enrichment)
 - [Orthology maps](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Orthology_maps)
 - [Detecting constitutively expressed genes](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/ConstitExpr_homologCT.R)
-- [Differential expression: limma-voom](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/limmaVoom_DEgenes.R)
+
 
 ## Protocols
 These detailed bench protocols describe the methods as carried out in the Tomato Root Atlas paper.
