@@ -21,6 +21,7 @@ Code and resources for Tomato Root Atlas
 - [Ontology enrichment](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Ontology_enrichment)
 - [Orthology maps](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/Orthology_maps)
 - [Detecting constitutively expressed genes](https://github.com/plant-plasticity/tomato-root-atlas-2020/tree/master/Scripts/ConstitExpr_homologCT.R)
+- [Test for enrichment of the arabidopsis N network genes in the exodermis](https://github.com/plant-plasticity/tomato-root-atlas-2020/blob/master/Scripts/Arabidopsis_YNM_enrichment/NitrogenNetwork_overlap_ExodermisNetwork.R)
 
 
 ## Protocols
